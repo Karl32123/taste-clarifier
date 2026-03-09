@@ -7,18 +7,22 @@ const openai = new OpenAI({
 });
 
 export async function POST(req: Request) {
-  const { prompt } = await req.json();
-  const response = await openai.images.generate({
-    model: 'grok-imagine-image',
-    prompt: prompt,
-    response_format: 'b64_json',
-  });
+  try {
+    const { prompt } = await req.json();
+    const response = await openai.images.generate({
+      model: 'grok-imagine-image',
+      prompt: prompt,
+      response_format: 'b64_json',
+    });
 
-  // Fix: Check if data exists
-  if (!response.data || !response.data[0]) {
-    return NextResponse.json({ error: 'No image generated' }, { status: 500 });
+    if (!response.data || !response.data[0]) {
+      throw new Error('No image generated');
+    }
+
+    const base64 = response.data[0].b64_json;
+    return NextResponse.json({ url: `data:image/png;base64,${base64}` });
+  } catch (error: any) {
+    console.error('Image generation error:', error);  // Logs to Vercel
+    return NextResponse.json({ error: error.message || 'Internal error' }, { status: 500 });
   }
-
-  const base64 = response.data[0].b64_json;
-  return NextResponse.json({ url: `data:image/png;base64,${base64}` });
 }

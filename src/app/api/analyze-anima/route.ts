@@ -27,5 +27,10 @@ export async function POST(req: Request) {
     max_tokens: 700,
   });
 
+  // Fix: Check if content exists
+  if (!completion.choices[0]?.message?.content) {
+    return NextResponse.json({ error: 'No analysis generated' }, { status: 500 });
+  }
+
   return NextResponse.json({ analysis: completion.choices[0].message.content });
 }

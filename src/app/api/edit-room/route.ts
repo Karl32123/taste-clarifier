@@ -43,12 +43,14 @@ export async function POST(req: Request) {
         prompt: `${descText}. Now apply these changes: ${prompt}. Realistic, high detail.`,
         response_format: 'b64_json',
       });
-      if (!genResponse.data[0]) throw new Error('Fallback failed');
+      if (!genResponse.data || !genResponse.data[0]) throw new Error('Fallback failed: No data returned');
       const base64 = genResponse.data[0].b64_json;
+      if (!base64) throw new Error('Fallback failed: No base64 image');
       return NextResponse.json({ url: `data:image/png;base64,${base64}` });
     }
 
     const data = await res.json();
+    if (!data.data || !data.data[0]) throw new Error('No edited image data');
     const base64 = data.data[0].b64_json;
     return NextResponse.json({ url: `data:image/png;base64,${base64}` });
   } catch (error: any) {

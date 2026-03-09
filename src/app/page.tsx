@@ -17,14 +17,21 @@ export default function TasteClarifier() {
   // === DISCOVER TAB ===
   const generateInspiration = async (category: string) => {
     setIsLoading(true);
-    const res = await fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: `Highly beautiful ${category}, masterpiece, perfect composition, elegant lighting, cinematic` }),
-    });
-    const data = await res.json();
-    setGeneratedImages(prev => [data.url, ...prev].slice(0, 6));
-    setIsLoading(false);
+    try {
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: `Highly beautiful ${category}, masterpiece, perfect composition, elegant lighting, cinematic` }),
+      });
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      const data = await res.json();
+      setGeneratedImages(prev => [data.url, ...prev].slice(0, 6));
+    } catch (error: any) {
+      alert('Error generating inspiration: ' + error.message + '. Check console/logs for details.');
+      console.error(error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // === ROOM VISUALIZER ===
@@ -40,16 +47,22 @@ export default function TasteClarifier() {
   const visualizeRoomChange = async (change: string) => {
     if (!roomPreview) return;
     setIsLoading(true);
-    const base64 = roomPreview.split(',')[1];
-
-    const res = await fetch('/api/edit-room', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: change, imageBase64: base64 }),
-    });
-    const data = await res.json();
-    setRoomEdited(data.url);
-    setIsLoading(false);
+    try {
+      const base64 = roomPreview.split(',')[1];
+      const res = await fetch('/api/edit-room', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: change, imageBase64: base64 }),
+      });
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      const data = await res.json();
+      setRoomEdited(data.url);
+    } catch (error: any) {
+      alert('Error visualizing room: ' + error.message + '. Check if image editing is supported or key issue.');
+      console.error(error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // === ANIMA EXPLORER ===
@@ -65,16 +78,22 @@ export default function TasteClarifier() {
   const analyzeAnima = async () => {
     if (!animaPreview) return;
     setIsLoading(true);
-    const base64 = animaPreview.split(',')[1];
-
-    const res = await fetch('/api/analyze-anima', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageBase64: base64 }),
-    });
-    const data = await res.json();
-    setAnimaAnalysis(data.analysis);
-    setIsLoading(false);
+    try {
+      const base64 = animaPreview.split(',')[1];
+      const res = await fetch('/api/analyze-anima', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: base64 }),
+      });
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      const data = await res.json();
+      setAnimaAnalysis(data.analysis);
+    } catch (error: any) {
+      alert('Error analyzing Anima: ' + error.message + '. Check API key, model access, or logs.');
+      console.error(error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

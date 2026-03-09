@@ -13,6 +13,12 @@ export async function POST(req: Request) {
     prompt: prompt,
     response_format: 'b64_json',
   });
+
+  // Fix: Check if data exists
+  if (!response.data || !response.data[0]) {
+    return NextResponse.json({ error: 'No image generated' }, { status: 500 });
+  }
+
   const base64 = response.data[0].b64_json;
   return NextResponse.json({ url: `data:image/png;base64,${base64}` });
 }

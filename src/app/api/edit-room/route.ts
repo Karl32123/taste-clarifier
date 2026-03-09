@@ -18,6 +18,12 @@ export async function POST(req: Request) {
   });
 
   const data = await res.json();
+
+  // Fix: Check if data exists
+  if (!data.data || !data.data[0]) {
+    return NextResponse.json({ error: 'No edited image generated' }, { status: 500 });
+  }
+
   const base64 = data.data[0].b64_json;
   return NextResponse.json({ url: `data:image/png;base64,${base64}` });
 }

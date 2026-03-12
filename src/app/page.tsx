@@ -1,99 +1,72 @@
 'use client';
 
-import { useState } from 'react';
-import { Palette, Home, Heart, Sparkles, Upload } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Palette, Home, Heart, Sparkles, Upload, Plus, Trash2 } from 'lucide-react';
 
 type Tab = 'discover' | 'room' | 'anima' | 'gallery';
+type AnimaProfile = { id: string; name: string; images: string[] };
 
 export default function TasteClarifier() {
-  const [tab, setTab] = useState<Tab>('discover');
+  const [tab, setTab] = useState<Tab>('anima'); // default to Anima since that's what you want now
+  const [animaProfiles, setAnimaProfiles] = useState<AnimaProfile[]>([]);
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  const [newProfileName, setNewProfileName] = useState('');
   const [roomPreview, setRoomPreview] = useState<string | null>(null);
   const [roomEdited, setRoomEdited] = useState<string | null>(null);
-  const [animaPreview, setAnimaPreview] = useState<string | null>(null);
-  const [animaAnalysis, setAnimaAnalysis] = useState<string>('');
-  const [isLoading, setIsLoading] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
 
-  // === DISCOVER TAB ===
-  const generateInspiration = async (category: string) => {
-    setIsLoading(true);
-    try {
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: `Highly beautiful ${category}, masterpiece, perfect composition, elegant lighting, cinematic` }),
-      });
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
-      const data = await res.json();
-      setGeneratedImages(prev => [data.url, ...prev].slice(0, 6));
-    } catch (error: any) {
-      alert('Error generating inspiration: ' + error.message + '. Check console/logs for details.');
-      console.error(error);
-    } finally {
-      setIsLoading(false);
-    }
+  // Load profiles from browser memory
+  useEffect(() => {
+    const saved = localStorage.getItem('animaProfiles');
+    if (saved) setAnimaProfiles(JSON.parse(saved));
+  }, []);
+
+  // Save profiles to browser memory
+  useEffect(() => {
+    localStorage.setItem('animaProfiles', JSON.stringify(animaProfiles));
+  }, [animaProfiles]);
+
+  const selectedProfile = animaProfiles.find(p => p.id === selectedProfileId);
+
+  // === CREATE NEW PROFILE ===
+  const createProfile = () => {
+    if (!newProfileName.trim()) return;
+    const newProfile: AnimaProfile = {
+      id: Date.now().toString(),
+      name: newProfileName.trim(),
+      images: [],
+    };
+    setAnimaProfiles([...animaProfiles, newProfile]);
+    setSelectedProfileId(newProfile.id);
+    setNewProfileName('');
   };
 
-  // === ROOM VISUALIZER ===
-  const handleRoomUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+  // === UPLOAD IMAGES TO SELECTED PROFILE ===
+  const handleMultipleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || !selectedProfileId) return;
+
+    Array.from(files).forEach(file => {
       const reader = new FileReader();
-      reader.onload = (ev) => setRoomPreview(ev.target?.result as string);
+      reader.onload = (ev) => {
+        const base64 = ev.target?.result as string;
+        setAnimaProfiles(prev =>
+          prev.map(p =>
+            p.id === selectedProfileId
+              ? { ...p, images: [...p.images, base64] }
+              : p
+          )
+        );
+      };
       reader.readAsDataURL(file);
-    }
+    });
   };
 
-  const visualizeRoomChange = async (change: string) => {
-    if (!roomPreview) return;
-    setIsLoading(true);
-    try {
-      const base64 = roomPreview.split(',')[1];
-      const res = await fetch('/api/edit-room', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: change, imageBase64: base64 }),
-      });
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
-      const data = await res.json();
-      setRoomEdited(data.url);
-    } catch (error: any) {
-      alert('Error visualizing room: ' + error.message + '. Check if image editing is supported or key issue.');
-      console.error(error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // === ANIMA EXPLORER ===
-  const handleAnimaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (ev) => setAnimaPreview(ev.target?.result as string);
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const analyzeAnima = async () => {
-    if (!animaPreview) return;
-    setIsLoading(true);
-    try {
-      const base64 = animaPreview.split(',')[1];
-      const res = await fetch('/api/analyze-anima', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: base64 }),
-      });
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
-      const data = await res.json();
-      setAnimaAnalysis(data.analysis);
-    } catch (error: any) {
-      alert('Error analyzing Anima: ' + error.message + '. Check API key, model access, or logs.');
-      console.error(error);
-    } finally {
-      setIsLoading(false);
-    }
+  // === DELETE PROFILE ===
+  const deleteProfile = (id: string) => {
+    if (!confirm('Delete this Anima profile?')) return;
+    setAnimaProfiles(prev => prev.filter(p => p.id !== id));
+    if (selectedProfileId === id) setSelectedProfileId(null);
   };
 
   return (
@@ -103,7 +76,7 @@ export default function TasteClarifier() {
           <Sparkles className="w-10 h-10 gold-accent" />
           <h1 className="text-5xl font-light tracking-tighter">Taste Clarifier</h1>
         </div>
-        <p className="text-stone-400">You + Grok refining beauty together</p>
+        <p className="text-stone-400">Your personal beauty eye + Grok (API paused for now)</p>
       </header>
 
       {/* TABS */}
@@ -127,120 +100,103 @@ export default function TasteClarifier() {
         })}
       </div>
 
-      {/* DISCOVER TAB */}
-      {tab === 'discover' && (
-        <div>
-          <h2 className="text-3xl mb-6">What kind of beauty shall we explore today?</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {['Minimalist Interior', 'Elegant Architecture', 'Timeless Clothing', 'Contemporary Art'].map(cat => (
-              <button
-                key={cat}
-                onClick={() => generateInspiration(cat)}
-                className="glass p-8 rounded-3xl text-left hover:scale-105 transition-transform"
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
-            {generatedImages.map((url, i) => (
-              <img key={i} src={url} alt="inspiration" className="rounded-3xl shadow-2xl" />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ROOM VISUALIZER */}
-      {tab === 'room' && (
-        <div className="max-w-4xl mx-auto">
-          <div className="glass p-8 rounded-3xl">
-            <label className="block text-center cursor-pointer border-2 border-dashed border-white/30 rounded-3xl py-16 hover:border-white/60">
-              <Upload className="mx-auto mb-4" />
-              <p>Upload photo of your room</p>
-              <input type="file" accept="image/*" onChange={handleRoomUpload} className="hidden" />
-            </label>
-
-            {roomPreview && (
-              <div className="mt-8 grid grid-cols-2 gap-8">
-                <div>
-                  <p className="mb-2 text-sm text-stone-400">Original</p>
-                  <img src={roomPreview} className="rounded-2xl" />
-                </div>
-                <div>
-                  <p className="mb-2 text-sm text-stone-400">Grok&apos;s version</p>
-                  {roomEdited ? (
-                    <img src={roomEdited} className="rounded-2xl" />
-                  ) : (
-                    <div className="bg-zinc-900 h-full rounded-2xl flex items-center justify-center text-stone-500">
-                      Describe the change below ↓
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {roomPreview && (
-              <div className="mt-8">
-                <textarea
-                  id="change"
-                  placeholder="e.g. change walls to warm beige, replace sofa with deep green velvet, add oak shelves and soft lighting"
-                  className="w-full glass p-6 rounded-2xl h-32"
-                />
-                <button
-                  onClick={() => visualizeRoomChange((document.getElementById('change') as HTMLTextAreaElement).value)}
-                  disabled={isLoading}
-                  className="mt-4 w-full bg-white text-black py-4 rounded-2xl font-medium hover:bg-amber-300"
-                >
-                  {isLoading ? 'Grok is painting...' : 'Visualize the change'}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ANIMA EXPLORER */}
+      {/* ANIMA EXPLORER – NEW FEATURE */}
       {tab === 'anima' && (
-        <div className="max-w-2xl mx-auto glass p-10 rounded-3xl">
-          <label className="block text-center cursor-pointer border-2 border-dashed border-white/30 rounded-3xl py-20">
-            <Heart className="mx-auto mb-4 w-12 h-12" />
-            <p>Upload image of a woman that instantly captivates you</p>
-            <input type="file" accept="image/*" onChange={handleAnimaUpload} className="hidden" />
-          </label>
-
-          {animaPreview && (
-            <>
-              <img src={animaPreview} className="mx-auto mt-8 rounded-3xl max-h-96" />
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* LEFT: List of your named profiles */}
+          <div className="lg:col-span-4 glass p-6 rounded-3xl h-fit">
+            <div className="flex gap-3 mb-6">
+              <input
+                type="text"
+                value={newProfileName}
+                onChange={(e) => setNewProfileName(e.target.value)}
+                placeholder="Name (e.g. Elena from TV show)"
+                className="flex-1 glass px-4 py-3 rounded-2xl"
+              />
               <button
-                onClick={analyzeAnima}
-                disabled={isLoading}
-                className="mt-8 w-full py-4 bg-gradient-to-r from-amber-400 to-yellow-600 text-black rounded-2xl font-semibold"
+                onClick={createProfile}
+                className="bg-white text-black px-6 py-3 rounded-2xl flex items-center gap-2 hover:bg-amber-300"
               >
-                {isLoading ? 'Uncovering your Anima projection...' : 'Reveal my Anima projection'}
+                <Plus className="w-5 h-5" /> Create
               </button>
-            </>
-          )}
-
-          {animaAnalysis && (
-            <div className="mt-10 prose prose-invert max-w-none">
-              <h3 className="gold-accent">Your Anima speaks through her:</h3>
-              <p className="whitespace-pre-wrap text-lg leading-relaxed">{animaAnalysis}</p>
             </div>
-          )}
+
+            <div className="space-y-3 max-h-[600px] overflow-y-auto">
+              {animaProfiles.length === 0 && (
+                <p className="text-stone-500 text-center py-8">No profiles yet.<br />Create your first one above ↑</p>
+              )}
+              {animaProfiles.map((profile) => (
+                <button
+                  key={profile.id}
+                  onClick={() => setSelectedProfileId(profile.id)}
+                  className={`w-full text-left p-4 rounded-2xl flex justify-between items-center transition-all ${selectedProfileId === profile.id ? 'bg-white text-black' : 'hover:bg-white/10'}`}
+                >
+                  <div>
+                    <div className="font-medium">{profile.name}</div>
+                    <div className="text-xs text-stone-400">{profile.images.length} images</div>
+                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); deleteProfile(profile.id); }}
+                    className="text-red-400 hover:text-red-600"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* RIGHT: Selected profile area */}
+          <div className="lg:col-span-8 glass p-8 rounded-3xl">
+            {!selectedProfile ? (
+              <div className="h-96 flex items-center justify-center text-stone-400">
+                Create or click a profile on the left to start collecting images
+              </div>
+            ) : (
+              <>
+                <h2 className="text-3xl mb-6">{selectedProfile.name}</h2>
+
+                {/* Upload more images */}
+                <label className="block cursor-pointer border-2 border-dashed border-white/30 rounded-3xl py-12 text-center hover:border-white/60 mb-8">
+                  <Upload className="mx-auto mb-3 w-10 h-10" />
+                  <p className="text-lg">Add more photos of her</p>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleMultipleUpload}
+                    className="hidden"
+                  />
+                </label>
+
+                {/* Gallery */}
+                {selectedProfile.images.length > 0 ? (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {selectedProfile.images.map((img, i) => (
+                      <div key={i} className="relative rounded-2xl overflow-hidden">
+                        <img src={img} className="w-full h-64 object-cover" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-stone-500 text-center py-12">No images yet – upload some above</p>
+                )}
+
+                {/* Future analysis note */}
+                <div className="mt-10 p-6 glass rounded-2xl text-center">
+                  <p className="text-amber-300">When xAI is ready again, click one button and I’ll analyse the whole collection for your Anima projection.</p>
+                  <p className="text-sm text-stone-500 mt-2">For now just collect – the more images, the clearer your taste becomes.</p>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 
-      {/* GALLERY */}
-      {tab === 'gallery' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {generatedImages.length > 0 ? generatedImages.map((url,i) => (
-            <img key={i} src={url} className="rounded-3xl" />
-          )) : (
-            <p className="col-span-3 text-center text-stone-500">Generate images in Discover tab to fill your gallery</p>
-          )}
-        </div>
-      )}
+      {/* Other tabs (kept simple – they need API later) */}
+      {tab === 'discover' && <div className="text-center py-20 text-stone-500">Discover tab needs API credits to generate images. We’ll turn it on later.</div>}
+      {tab === 'room' && <div className="text-center py-20 text-stone-500">Room Visualizer needs API credits. We’ll turn it on later.</div>}
+      {tab === 'gallery' && <div className="text-center py-20 text-stone-500">Your generated images will appear here when API is back.</div>}
     </div>
   );
 }

@@ -13,6 +13,7 @@ export default function TasteClarifier() {
   const [newProfileName, setNewProfileName] = useState('');
   const [inspirationImages, setInspirationImages] = useState<string[]>([]);
   const [tempUploads, setTempUploads] = useState<string[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Load from browser
   useEffect(() => {
@@ -38,14 +39,25 @@ export default function TasteClarifier() {
     setNewProfileName('');
   };
 
-  const handleTempUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
+  // === HANDLE UPLOAD (click OR drag) ===
+  const handleFiles = (files: FileList) => {
     Array.from(files).forEach(file => {
       const reader = new FileReader();
       reader.onload = (ev) => setTempUploads(prev => [...prev, ev.target?.result as string]);
       reader.readAsDataURL(file);
     });
+  };
+
+  // Drag & Drop handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+  const handleDragLeave = () => setIsDragging(false);
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files) handleFiles(e.dataTransfer.files);
   };
 
   const sendToDiscover = (img: string) => {
@@ -61,7 +73,7 @@ export default function TasteClarifier() {
   };
 
   const sendToNewAnima = (img: string) => {
-    const name = prompt("Name this new Anima profile (e.g. Elena from TV show):");
+    const name = prompt("Name this new Anima profile:");
     if (!name) return;
     const newP = { id: Date.now().toString(), name, images: [img] };
     setAnimaProfiles([...animaProfiles, newP]);
@@ -79,7 +91,7 @@ export default function TasteClarifier() {
           <Sparkles className="w-10 h-10 gold-accent" />
           <h1 className="text-5xl font-light tracking-tighter">Taste Clarifier</h1>
         </div>
-        <p className="text-stone-400">Upload anywhere → route anywhere</p>
+        <p className="text-stone-400">Drag or click → route anywhere</p>
       </header>
 
       {/* TABS */}
@@ -100,35 +112,41 @@ export default function TasteClarifier() {
         })}
       </div>
 
-      {/* NEW IMAGES - CENTRAL HUB */}
+      {/* NEW IMAGES – NOW WITH DRAG & DROP */}
       {tab === 'newimages' && (
         <div className="glass p-8 rounded-3xl">
-          <h2 className="text-3xl mb-6">Drop any beautiful images here</h2>
-          <label className="block cursor-pointer border-2 border-dashed border-white/30 rounded-3xl py-16 text-center hover:border-white/60">
+          <h2 className="text-3xl mb-6">New Images – Drag or click</h2>
+          
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`border-2 border-dashed rounded-3xl py-16 text-center transition-all ${isDragging ? 'border-amber-300 bg-amber-300/10' : 'border-white/30 hover:border-white/60'}`}
+          >
             <Upload className="mx-auto mb-4 w-12 h-12" />
-            <p className="text-xl">Click or drag photos from your computer</p>
-            <input type="file" accept="image/*" multiple onChange={handleTempUpload} className="hidden" />
-          </label>
+            <p className="text-xl">Drag photos here or click to browse</p>
+            <input type="file" accept="image/*" multiple onChange={(e) => e.target.files && handleFiles(e.target.files)} className="hidden" />
+          </div>
 
           {tempUploads.length > 0 && (
             <div className="mt-12">
-              <h3 className="mb-6 text-lg">Choose destination for each image ↓</h3>
+              <h3 className="mb-6 text-lg">Choose where each image goes ↓</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {tempUploads.map((img, i) => (
                   <div key={i} className="relative rounded-3xl overflow-hidden">
                     <img src={img} className="w-full aspect-square object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 to-transparent flex flex-col justify-end p-4 gap-3">
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 p-4 flex flex-col justify-end gap-3">
                       <button onClick={() => sendToDiscover(img)} className="bg-white text-black py-3 rounded-2xl text-sm flex items-center justify-center gap-2 hover:bg-amber-300">
                         <ArrowRight className="w-4 h-4" /> Send to Discover Beauty
                       </button>
                       <button onClick={() => sendToNewAnima(img)} className="bg-amber-400 text-black py-3 rounded-2xl text-sm">Create New Anima Profile</button>
                       {animaProfiles.length > 0 && (
                         <select onChange={e => sendToAnima(img, e.target.value)} className="glass py-3 rounded-2xl text-sm">
-                          <option value="">Add to existing Anima profile...</option>
+                          <option value="">Add to existing Anima...</option>
                           {animaProfiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
                       )}
-                      <button onClick={() => deleteTemp(img)} className="text-red-400 text-xs mt-2">Remove image</button>
+                      <button onClick={() => deleteTemp(img)} className="text-red-400 text-xs">Remove</button>
                     </div>
                   </div>
                 ))}
@@ -138,10 +156,25 @@ export default function TasteClarifier() {
         </div>
       )}
 
-      {/* DISCOVER BEAUTY - LIVE & MANUAL */}
+      {/* DISCOVER BEAUTY – OLD BUTTONS BACK + YOUR COLLECTION */}
       {tab === 'discover' && (
         <div>
-          <h2 className="text-3xl mb-8">Discover Beauty – Your Inspiration Collection</h2>
+          <h2 className="text-3xl mb-6">Discover Beauty</h2>
+          
+          {/* OLD CATEGORY BUTTONS RESTORED */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
+            {['Minimalist Interior', 'Elegant Architecture', 'Timeless Clothing', 'Contemporary Art'].map(cat => (
+              <button
+                key={cat}
+                onClick={() => alert(`"${cat}" inspiration coming soon!\n\nFor now: go to "New Images" tab and drag your own photos here.`)}
+                className="glass p-8 rounded-3xl text-left hover:scale-105 transition-transform hover:bg-white/10"
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          {/* Your actual collection */}
           {inspirationImages.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
               {inspirationImages.map((url, i) => (
@@ -149,7 +182,7 @@ export default function TasteClarifier() {
               ))}
             </div>
           ) : (
-            <p className="text-stone-500 text-center py-20">Empty for now.<br />Go to “New Images” and send some here.</p>
+            <p className="text-stone-500 text-center py-20">Your inspiration collection is empty.<br />Drag images in "New Images" tab and send them here.</p>
           )}
         </div>
       )}
@@ -157,7 +190,6 @@ export default function TasteClarifier() {
       {/* ANIMA EXPLORER */}
       {tab === 'anima' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Profile list */}
           <div className="lg:col-span-4 glass p-6 rounded-3xl">
             <div className="flex gap-3 mb-6">
               <input type="text" value={newProfileName} onChange={e => setNewProfileName(e.target.value)} placeholder="e.g. Elena from TV show" className="flex-1 glass px-4 py-3 rounded-2xl" />
@@ -172,7 +204,6 @@ export default function TasteClarifier() {
             </div>
           </div>
 
-          {/* Selected profile gallery */}
           <div className="lg:col-span-8 glass p-8 rounded-3xl min-h-[500px]">
             {selectedProfile ? (
               <>
@@ -186,7 +217,7 @@ export default function TasteClarifier() {
         </div>
       )}
 
-      {tab === 'room' && <div className="text-center py-20 text-stone-500">Room Visualizer still paused – let me know when you want it back.</div>}
+      {tab === 'room' && <div className="text-center py-20 text-stone-500">Room Visualizer still paused.</div>}
     </div>
   );
 }

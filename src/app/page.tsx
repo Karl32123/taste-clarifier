@@ -1,47 +1,48 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Palette, Home, Heart, Sparkles, Upload, Plus, Trash2, ArrowRight, Folder } from 'lucide-react';
+import { Palette, Home, Heart, Sparkles, Upload, Plus, Trash2, ArrowRight, Folder, ChevronDown } from 'lucide-react';
 
 type Tab = 'newimages' | 'discover' | 'anima' | 'room';
-type AnimaProfile = { id: string; name: string; images: string[]; themeId?: string };
+type Anima = { id: string; name: string; images: string[]; themeId?: string };
 type Theme = { id: string; name: string };
 
 export default function TasteClarifier() {
   const [tab, setTab] = useState<Tab>('newimages');
-  const [animaProfiles, setAnimaProfiles] = useState<AnimaProfile[]>([]);
+  const [animas, setAnimas] = useState<Anima[]>([]);
   const [themes, setThemes] = useState<Theme[]>([]);
-  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
-  const [newProfileName, setNewProfileName] = useState('');
+  const [selectedAnimaId, setSelectedAnimaId] = useState<string | null>(null);
+  const [expandedThemes, setExpandedThemes] = useState<Record<string, boolean>>({});
+  const [newAnimaName, setNewAnimaName] = useState('');
   const [newThemeName, setNewThemeName] = useState('');
   const [inspirationImages, setInspirationImages] = useState<string[]>([]);
   const [tempUploads, setTempUploads] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Load (backward compatible with old data)
+  // Load
   useEffect(() => {
-    const savedProfiles = localStorage.getItem('animaProfiles');
-    const savedThemes = localStorage.getItem('animaThemes');
+    const savedAnimas = localStorage.getItem('animas');
+    const savedThemes = localStorage.getItem('themes');
     const savedInspirations = localStorage.getItem('inspirationImages');
-    if (savedProfiles) setAnimaProfiles(JSON.parse(savedProfiles));
+    if (savedAnimas) setAnimas(JSON.parse(savedAnimas));
     if (savedThemes) setThemes(JSON.parse(savedThemes));
     if (savedInspirations) setInspirationImages(JSON.parse(savedInspirations));
   }, []);
 
   // Auto-save
   useEffect(() => {
-    localStorage.setItem('animaProfiles', JSON.stringify(animaProfiles));
-    localStorage.setItem('animaThemes', JSON.stringify(themes));
+    localStorage.setItem('animas', JSON.stringify(animas));
+    localStorage.setItem('themes', JSON.stringify(themes));
     localStorage.setItem('inspirationImages', JSON.stringify(inspirationImages));
-  }, [animaProfiles, themes, inspirationImages]);
+  }, [animas, themes, inspirationImages]);
 
-  const selectedProfile = animaProfiles.find(p => p.id === selectedProfileId);
+  const selectedAnima = animas.find(a => a.id === selectedAnimaId);
 
-  // === SAFE DRAG & DROP (max 8 + clear warning) ===
+  // SAFE DRAG – max 8 with clear warning
   const handleFiles = async (files: FileList) => {
     if (files.length > 8) {
-      alert("⚠️ Max 8 images at once to keep everything fast and safe.\nOnly the first 8 were added – upload the rest next time.");
+      alert("⚠️ Maximum 8 images at once.\nOnly the first 8 were added.");
     }
     const toProcess = Array.from(files).slice(0, 8);
     setIsProcessing(true);
@@ -70,16 +71,37 @@ export default function TasteClarifier() {
     setNewThemeName('');
   };
 
-  const createProfile = () => {
-    if (!newProfileName.trim()) return;
-    const newP: AnimaProfile = { id: Date.now().toString(), name: newProfileName.trim(), images: [] };
-    setAnimaProfiles([...animaProfiles, newP]);
-    setSelectedProfileId(newP.id);
-    setNewProfileName('');
+  const createAnima = () => {
+    if (!newAnimaName.trim()) return;
+    const newA: Anima = { id: Date.now().toString(), name: newAnimaName.trim(), images: [] };
+    setAnimas([...animas, newA]);
+    setSelectedAnimaId(newA.id);
+    setNewAnimaName('');
   };
 
-  const assignProfileToTheme = (profileId: string, themeId: string) => {
-    setAnimaProfiles(prev => prev.map(p => p.id === profileId ? { ...p, themeId } : p));
+  const deleteAnima = (id: string) => {
+    if (!confirm("Delete this Anima and all its images?")) return;
+    setAnimas(prev => prev.filter(a => a.id !== id));
+    if (selectedAnimaId === id) setSelectedAnimaId(null);
+  };
+
+  const deleteTheme = (id: string) => {
+    if (!confirm("Delete this Theme? (Anim as will become unassigned)")) return;
+    setThemes(prev => prev.filter(t => t.id !== id));
+  };
+
+  const deleteImage = (animaId: string, imageIndex: number) => {
+    setAnimas(prev => prev.map(a => 
+      a.id === animaId ? { ...a, images: a.images.filter((_, i) => i !== imageIndex) } : a
+    ));
+  };
+
+  const toggleTheme = (themeId: string) => {
+    setExpandedThemes(prev => ({ ...prev, [themeId]: !prev[themeId] }));
+  };
+
+  const assignToTheme = (animaId: string, themeId: string) => {
+    setAnimas(prev => prev.map(a => a.id === animaId ? { ...a, themeId } : a));
   };
 
   const sendToDiscover = (img: string) => {
@@ -88,10 +110,10 @@ export default function TasteClarifier() {
   };
 
   const sendToNewAnima = (img: string) => {
-    const name = prompt("Name this new Anima profile:");
+    const name = prompt("Name this new Anima:");
     if (!name) return;
-    const newP: AnimaProfile = { id: Date.now().toString(), name, images: [img] };
-    setAnimaProfiles([...animaProfiles, newP]);
+    const newA: Anima = { id: Date.now().toString(), name, images: [img] };
+    setAnimas([...animas, newA]);
     setTempUploads(prev => prev.filter(i => i !== img));
   };
 
@@ -104,7 +126,7 @@ export default function TasteClarifier() {
           <Sparkles className="w-10 h-10 gold-accent" />
           <h1 className="text-5xl font-light tracking-tighter">Taste Clarifier</h1>
         </div>
-        <p className="text-stone-400">All images saved in your browser forever</p>
+        <p className="text-stone-400">Everything saved forever in your browser</p>
       </header>
 
       {/* TABS */}
@@ -125,14 +147,14 @@ export default function TasteClarifier() {
         })}
       </div>
 
-      {/* NEW IMAGES – fixed limit */}
+      {/* NEW IMAGES – fixed warning */}
       {tab === 'newimages' && (
         <div className="glass p-8 rounded-3xl">
           <h2 className="text-3xl mb-6">New Images – Drag or click (max 8 at once)</h2>
           <div onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}
             className={`border-2 border-dashed rounded-3xl py-16 text-center transition-all ${isDragging ? 'border-amber-300 bg-amber-300/10' : 'border-white/30 hover:border-white/60'}`}>
             <Upload className="mx-auto mb-4 w-12 h-12" />
-            <p className="text-xl">Drag photos here or click to browse</p>
+            <p className="text-xl">Drag photos here or click</p>
             <input type="file" accept="image/*" multiple onChange={e => e.target.files && handleFiles(e.target.files)} className="hidden" />
           </div>
 
@@ -145,11 +167,11 @@ export default function TasteClarifier() {
                   <img src={img} className="w-full aspect-square object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 p-4 flex flex-col justify-end gap-3">
                     <button onClick={() => sendToDiscover(img)} className="bg-white text-black py-3 rounded-2xl text-sm">→ Discover Beauty</button>
-                    <button onClick={() => sendToNewAnima(img)} className="bg-amber-400 text-black py-3 rounded-2xl text-sm">Create New Profile</button>
-                    {animaProfiles.length > 0 && (
-                      <select onChange={e => { const p = animaProfiles.find(pr => pr.id === e.target.value); if (p) { setAnimaProfiles(prev => prev.map(pr => pr.id === p.id ? {...pr, images: [...pr.images, img]} : pr)); setTempUploads(prev => prev.filter(x => x !== img)); } }} className="glass py-3 rounded-2xl text-sm">
-                        <option value="">Add to existing profile...</option>
-                        {animaProfiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    <button onClick={() => sendToNewAnima(img)} className="bg-amber-400 text-black py-3 rounded-2xl text-sm">Create New Anima</button>
+                    {animas.length > 0 && (
+                      <select onChange={e => { const a = animas.find(an => an.id === e.target.value); if (a) { setAnimas(prev => prev.map(an => an.id === a.id ? {...an, images: [...an.images, img]} : an)); setTempUploads(prev => prev.filter(x => x !== img)); } }} className="glass py-3 rounded-2xl text-sm">
+                        <option value="">Add to existing Anima...</option>
+                        {animas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                       </select>
                     )}
                     <button onClick={() => deleteTemp(img)} className="text-red-400 text-xs">Remove</button>
@@ -178,12 +200,11 @@ export default function TasteClarifier() {
         </div>
       )}
 
-      {/* ANIMA EXPLORER – FULLY WORKING PYRAMID */}
+      {/* ANIMA EXPLORER – expandable + delete everything */}
       {tab === 'anima' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Left side: Create + Pyramid list */}
+          {/* Left: Create + Pyramid */}
           <div className="lg:col-span-4 glass p-6 rounded-3xl">
-            {/* Create Theme */}
             <div className="mb-8">
               <h3 className="mb-3">Create Overarching Theme</h3>
               <div className="flex gap-3">
@@ -192,41 +213,56 @@ export default function TasteClarifier() {
               </div>
             </div>
 
-            {/* Create Profile */}
             <div className="mb-8">
-              <h3 className="mb-3">Create Profile</h3>
+              <h3 className="mb-3">Create Anima</h3>
               <div className="flex gap-3">
-                <input type="text" value={newProfileName} onChange={e => setNewProfileName(e.target.value)} placeholder="e.g. Marilyn Monroe type" className="flex-1 glass px-4 py-3 rounded-2xl" />
-                <button onClick={createProfile} className="bg-white text-black px-6 py-3 rounded-2xl">Create</button>
+                <input type="text" value={newAnimaName} onChange={e => setNewAnimaName(e.target.value)} placeholder="e.g. Marilyn Monroe type" className="flex-1 glass px-4 py-3 rounded-2xl" />
+                <button onClick={createAnima} className="bg-white text-black px-6 py-3 rounded-2xl">Create</button>
               </div>
             </div>
 
-            {/* Pyramid */}
-            <div className="space-y-6">
-              {themes.length > 0 && themes.map(theme => (
-                <div key={theme.id} className="glass p-5 rounded-2xl">
-                  <div className="font-medium mb-3 flex items-center gap-2">📌 {theme.name}</div>
-                  {animaProfiles.filter(p => p.themeId === theme.id).length > 0 ? (
-                    animaProfiles.filter(p => p.themeId === theme.id).map(profile => (
-                      <div key={profile.id} className="pl-6 py-1 cursor-pointer" onClick={() => setSelectedProfileId(profile.id)}>
-                        ↳ {profile.name} ({profile.images.length} images)
+            {/* Expandable Pyramid */}
+            <div className="space-y-4">
+              {themes.map(theme => {
+                const isExpanded = expandedThemes[theme.id] ?? true;
+                const themeAnimas = animas.filter(a => a.themeId === theme.id);
+                return (
+                  <div key={theme.id} className="glass p-5 rounded-2xl">
+                    <div className="flex justify-between items-center mb-3">
+                      <div className="font-medium flex items-center gap-2 cursor-pointer" onClick={() => toggleTheme(theme.id)}>
+                        📌 {theme.name} ({themeAnimas.length})
+                        <ChevronDown className={`w-5 h-5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                       </div>
-                    ))
-                  ) : <p className="pl-6 text-stone-500 text-sm">No profiles yet under this theme</p>}
-                </div>
-              ))}
+                      <button onClick={() => deleteTheme(theme.id)} className="text-red-400"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                    {isExpanded && (
+                      <div className="pl-6 space-y-2">
+                        {themeAnimas.map(anima => (
+                          <div key={anima.id} className="flex justify-between items-center cursor-pointer py-1" onClick={() => setSelectedAnimaId(anima.id)}>
+                            ↳ {anima.name} ({anima.images.length})
+                            <button onClick={e => { e.stopPropagation(); deleteAnima(anima.id); }} className="text-red-400"><Trash2 className="w-4 h-4" /></button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
 
-              {/* Unassigned profiles */}
-              {animaProfiles.filter(p => !p.themeId).length > 0 && (
+              {/* Unassigned Anim as */}
+              {animas.filter(a => !a.themeId).length > 0 && (
                 <div className="glass p-5 rounded-2xl">
-                  <div className="font-medium mb-3 text-amber-300">Unassigned Profiles</div>
-                  {animaProfiles.filter(p => !p.themeId).map(profile => (
-                    <div key={profile.id} className="pl-6 py-1 flex justify-between items-center cursor-pointer" onClick={() => setSelectedProfileId(profile.id)}>
-                      ↳ {profile.name} ({profile.images.length})
-                      <select onChange={e => assignProfileToTheme(profile.id, e.target.value)} className="text-xs bg-transparent">
-                        <option value="">Assign to theme…</option>
-                        {themes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                      </select>
+                  <div className="font-medium mb-3 text-amber-300">Unassigned Anim as</div>
+                  {animas.filter(a => !a.themeId).map(anima => (
+                    <div key={anima.id} className="pl-6 py-1 flex justify-between items-center cursor-pointer" onClick={() => setSelectedAnimaId(anima.id)}>
+                      ↳ {anima.name} ({anima.images.length})
+                      <div className="flex gap-2">
+                        <select onChange={e => assignToTheme(anima.id, e.target.value)} className="text-xs bg-transparent">
+                          <option value="">Assign theme…</option>
+                          {themes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </select>
+                        <button onClick={() => deleteAnima(anima.id)} className="text-red-400"><Trash2 className="w-4 h-4" /></button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -234,20 +270,32 @@ export default function TasteClarifier() {
             </div>
           </div>
 
-          {/* Right side: Gallery of selected profile */}
+          {/* Right: Gallery + delete images */}
           <div className="lg:col-span-8 glass p-8 rounded-3xl min-h-[500px]">
-            {selectedProfile ? (
+            {selectedAnima ? (
               <>
-                <h2 className="text-3xl mb-6">{selectedProfile.name}</h2>
-                {selectedProfile.images.length > 0 ? (
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-3xl">{selectedAnima.name}</h2>
+                  <button onClick={() => deleteAnima(selectedAnima.id)} className="text-red-400 flex items-center gap-2">
+                    <Trash2 className="w-5 h-5" /> Delete Anima
+                  </button>
+                </div>
+                {selectedAnima.images.length > 0 ? (
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {selectedProfile.images.map((img, i) => <img key={i} src={img} className="rounded-2xl" />)}
+                    {selectedAnima.images.map((img, i) => (
+                      <div key={i} className="relative rounded-2xl overflow-hidden group">
+                        <img src={img} className="w-full" />
+                        <button onClick={() => deleteImage(selectedAnima.id, i)} className="absolute top-2 right-2 bg-black/70 p-2 rounded-full opacity-0 group-hover:opacity-100">
+                          <Trash2 className="w-4 h-4 text-red-400" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                ) : <p className="text-stone-500">No images yet in this profile</p>}
+                ) : <p className="text-stone-500 text-center py-12">No images yet</p>}
               </>
             ) : (
               <div className="h-full flex items-center justify-center text-stone-500 text-center">
-                Click any profile name on the left<br />to see its images here
+                Click any Anima name on the left<br />to see and manage its images
               </div>
             )}
           </div>

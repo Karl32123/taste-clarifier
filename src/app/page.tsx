@@ -1,72 +1,75 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Palette, Home, Heart, Sparkles, Upload, Plus, Trash2 } from 'lucide-react';
+import { Palette, Home, Heart, Sparkles, Upload, Plus, Trash2, ArrowRight } from 'lucide-react';
 
-type Tab = 'discover' | 'room' | 'anima' | 'gallery';
+type Tab = 'newimages' | 'discover' | 'anima' | 'room';
 type AnimaProfile = { id: string; name: string; images: string[] };
 
 export default function TasteClarifier() {
-  const [tab, setTab] = useState<Tab>('anima'); // default to Anima since that's what you want now
+  const [tab, setTab] = useState<Tab>('newimages');
   const [animaProfiles, setAnimaProfiles] = useState<AnimaProfile[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [newProfileName, setNewProfileName] = useState('');
-  const [roomPreview, setRoomPreview] = useState<string | null>(null);
-  const [roomEdited, setRoomEdited] = useState<string | null>(null);
-  const [generatedImages, setGeneratedImages] = useState<string[]>([]);
+  const [inspirationImages, setInspirationImages] = useState<string[]>([]);
+  const [tempUploads, setTempUploads] = useState<string[]>([]);
 
-  // Load profiles from browser memory
+  // Load from browser
   useEffect(() => {
-    const saved = localStorage.getItem('animaProfiles');
-    if (saved) setAnimaProfiles(JSON.parse(saved));
+    const savedProfiles = localStorage.getItem('animaProfiles');
+    const savedInspirations = localStorage.getItem('inspirationImages');
+    if (savedProfiles) setAnimaProfiles(JSON.parse(savedProfiles));
+    if (savedInspirations) setInspirationImages(JSON.parse(savedInspirations));
   }, []);
 
-  // Save profiles to browser memory
+  // Auto-save
   useEffect(() => {
     localStorage.setItem('animaProfiles', JSON.stringify(animaProfiles));
-  }, [animaProfiles]);
+    localStorage.setItem('inspirationImages', JSON.stringify(inspirationImages));
+  }, [animaProfiles, inspirationImages]);
 
   const selectedProfile = animaProfiles.find(p => p.id === selectedProfileId);
 
-  // === CREATE NEW PROFILE ===
   const createProfile = () => {
     if (!newProfileName.trim()) return;
-    const newProfile: AnimaProfile = {
-      id: Date.now().toString(),
-      name: newProfileName.trim(),
-      images: [],
-    };
-    setAnimaProfiles([...animaProfiles, newProfile]);
-    setSelectedProfileId(newProfile.id);
+    const newP = { id: Date.now().toString(), name: newProfileName.trim(), images: [] };
+    setAnimaProfiles([...animaProfiles, newP]);
+    setSelectedProfileId(newP.id);
     setNewProfileName('');
   };
 
-  // === UPLOAD IMAGES TO SELECTED PROFILE ===
-  const handleMultipleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTempUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files || !selectedProfileId) return;
-
+    if (!files) return;
     Array.from(files).forEach(file => {
       const reader = new FileReader();
-      reader.onload = (ev) => {
-        const base64 = ev.target?.result as string;
-        setAnimaProfiles(prev =>
-          prev.map(p =>
-            p.id === selectedProfileId
-              ? { ...p, images: [...p.images, base64] }
-              : p
-          )
-        );
-      };
+      reader.onload = (ev) => setTempUploads(prev => [...prev, ev.target?.result as string]);
       reader.readAsDataURL(file);
     });
   };
 
-  // === DELETE PROFILE ===
-  const deleteProfile = (id: string) => {
-    if (!confirm('Delete this Anima profile?')) return;
-    setAnimaProfiles(prev => prev.filter(p => p.id !== id));
-    if (selectedProfileId === id) setSelectedProfileId(null);
+  const sendToDiscover = (img: string) => {
+    setInspirationImages(prev => [...prev, img]);
+    setTempUploads(prev => prev.filter(i => i !== img));
+  };
+
+  const sendToAnima = (img: string, profileId: string) => {
+    setAnimaProfiles(prev => prev.map(p => 
+      p.id === profileId ? { ...p, images: [...p.images, img] } : p
+    ));
+    setTempUploads(prev => prev.filter(i => i !== img));
+  };
+
+  const sendToNewAnima = (img: string) => {
+    const name = prompt("Name this new Anima profile (e.g. Elena from TV show):");
+    if (!name) return;
+    const newP = { id: Date.now().toString(), name, images: [img] };
+    setAnimaProfiles([...animaProfiles, newP]);
+    setTempUploads(prev => prev.filter(i => i !== img));
+  };
+
+  const deleteTemp = (img: string) => {
+    setTempUploads(prev => prev.filter(i => i !== img));
   };
 
   return (
@@ -76,127 +79,114 @@ export default function TasteClarifier() {
           <Sparkles className="w-10 h-10 gold-accent" />
           <h1 className="text-5xl font-light tracking-tighter">Taste Clarifier</h1>
         </div>
-        <p className="text-stone-400">Your personal beauty eye + Grok (API paused for now)</p>
+        <p className="text-stone-400">Upload anywhere → route anywhere</p>
       </header>
 
       {/* TABS */}
-      <div className="flex gap-2 mb-10 border-b border-white/10 pb-4">
+      <div className="flex gap-2 mb-10 border-b border-white/10 pb-4 flex-wrap">
         {[
+          { id: 'newimages', label: 'New Images', icon: Upload },
           { id: 'discover', label: 'Discover Beauty', icon: Palette },
-          { id: 'room', label: 'Room Visualizer', icon: Home },
           { id: 'anima', label: 'Anima Explorer', icon: Heart },
-          { id: 'gallery', label: 'My Gallery', icon: Sparkles },
+          { id: 'room', label: 'Room Visualizer', icon: Home },
         ].map((t) => {
           const Icon = t.icon;
           return (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id as Tab)}
-              className={`flex items-center gap-2 px-6 py-3 rounded-2xl transition-all ${tab === t.id ? 'bg-white text-black' : 'hover:bg-white/10'}`}
-            >
+            <button key={t.id} onClick={() => setTab(t.id as Tab)} 
+              className={`flex items-center gap-2 px-6 py-3 rounded-2xl transition-all ${tab === t.id ? 'bg-white text-black' : 'hover:bg-white/10'}`}>
               <Icon className="w-5 h-5" /> {t.label}
             </button>
           );
         })}
       </div>
 
-      {/* ANIMA EXPLORER – NEW FEATURE */}
+      {/* NEW IMAGES - CENTRAL HUB */}
+      {tab === 'newimages' && (
+        <div className="glass p-8 rounded-3xl">
+          <h2 className="text-3xl mb-6">Drop any beautiful images here</h2>
+          <label className="block cursor-pointer border-2 border-dashed border-white/30 rounded-3xl py-16 text-center hover:border-white/60">
+            <Upload className="mx-auto mb-4 w-12 h-12" />
+            <p className="text-xl">Click or drag photos from your computer</p>
+            <input type="file" accept="image/*" multiple onChange={handleTempUpload} className="hidden" />
+          </label>
+
+          {tempUploads.length > 0 && (
+            <div className="mt-12">
+              <h3 className="mb-6 text-lg">Choose destination for each image ↓</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {tempUploads.map((img, i) => (
+                  <div key={i} className="relative rounded-3xl overflow-hidden">
+                    <img src={img} className="w-full aspect-square object-cover" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 to-transparent flex flex-col justify-end p-4 gap-3">
+                      <button onClick={() => sendToDiscover(img)} className="bg-white text-black py-3 rounded-2xl text-sm flex items-center justify-center gap-2 hover:bg-amber-300">
+                        <ArrowRight className="w-4 h-4" /> Send to Discover Beauty
+                      </button>
+                      <button onClick={() => sendToNewAnima(img)} className="bg-amber-400 text-black py-3 rounded-2xl text-sm">Create New Anima Profile</button>
+                      {animaProfiles.length > 0 && (
+                        <select onChange={e => sendToAnima(img, e.target.value)} className="glass py-3 rounded-2xl text-sm">
+                          <option value="">Add to existing Anima profile...</option>
+                          {animaProfiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                      )}
+                      <button onClick={() => deleteTemp(img)} className="text-red-400 text-xs mt-2">Remove image</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* DISCOVER BEAUTY - LIVE & MANUAL */}
+      {tab === 'discover' && (
+        <div>
+          <h2 className="text-3xl mb-8">Discover Beauty – Your Inspiration Collection</h2>
+          {inspirationImages.length > 0 ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+              {inspirationImages.map((url, i) => (
+                <img key={i} src={url} alt="inspiration" className="rounded-3xl shadow-2xl" />
+              ))}
+            </div>
+          ) : (
+            <p className="text-stone-500 text-center py-20">Empty for now.<br />Go to “New Images” and send some here.</p>
+          )}
+        </div>
+      )}
+
+      {/* ANIMA EXPLORER */}
       {tab === 'anima' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* LEFT: List of your named profiles */}
-          <div className="lg:col-span-4 glass p-6 rounded-3xl h-fit">
+          {/* Profile list */}
+          <div className="lg:col-span-4 glass p-6 rounded-3xl">
             <div className="flex gap-3 mb-6">
-              <input
-                type="text"
-                value={newProfileName}
-                onChange={(e) => setNewProfileName(e.target.value)}
-                placeholder="Name (e.g. Elena from TV show)"
-                className="flex-1 glass px-4 py-3 rounded-2xl"
-              />
-              <button
-                onClick={createProfile}
-                className="bg-white text-black px-6 py-3 rounded-2xl flex items-center gap-2 hover:bg-amber-300"
-              >
-                <Plus className="w-5 h-5" /> Create
-              </button>
+              <input type="text" value={newProfileName} onChange={e => setNewProfileName(e.target.value)} placeholder="e.g. Elena from TV show" className="flex-1 glass px-4 py-3 rounded-2xl" />
+              <button onClick={createProfile} className="bg-white text-black px-6 py-3 rounded-2xl">Create</button>
             </div>
-
-            <div className="space-y-3 max-h-[600px] overflow-y-auto">
-              {animaProfiles.length === 0 && (
-                <p className="text-stone-500 text-center py-8">No profiles yet.<br />Create your first one above ↑</p>
-              )}
-              {animaProfiles.map((profile) => (
-                <button
-                  key={profile.id}
-                  onClick={() => setSelectedProfileId(profile.id)}
-                  className={`w-full text-left p-4 rounded-2xl flex justify-between items-center transition-all ${selectedProfileId === profile.id ? 'bg-white text-black' : 'hover:bg-white/10'}`}
-                >
-                  <div>
-                    <div className="font-medium">{profile.name}</div>
-                    <div className="text-xs text-stone-400">{profile.images.length} images</div>
-                  </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); deleteProfile(profile.id); }}
-                    className="text-red-400 hover:text-red-600"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+            <div className="space-y-3 max-h-[600px] overflow-auto">
+              {animaProfiles.map(p => (
+                <button key={p.id} onClick={() => setSelectedProfileId(p.id)} className={`w-full p-4 rounded-2xl text-left flex justify-between ${selectedProfileId === p.id ? 'bg-white text-black' : 'hover:bg-white/10'}`}>
+                  {p.name} <span className="text-xs text-stone-400">({p.images.length})</span>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* RIGHT: Selected profile area */}
-          <div className="lg:col-span-8 glass p-8 rounded-3xl">
-            {!selectedProfile ? (
-              <div className="h-96 flex items-center justify-center text-stone-400">
-                Create or click a profile on the left to start collecting images
-              </div>
-            ) : (
+          {/* Selected profile gallery */}
+          <div className="lg:col-span-8 glass p-8 rounded-3xl min-h-[500px]">
+            {selectedProfile ? (
               <>
                 <h2 className="text-3xl mb-6">{selectedProfile.name}</h2>
-
-                {/* Upload more images */}
-                <label className="block cursor-pointer border-2 border-dashed border-white/30 rounded-3xl py-12 text-center hover:border-white/60 mb-8">
-                  <Upload className="mx-auto mb-3 w-10 h-10" />
-                  <p className="text-lg">Add more photos of her</p>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={handleMultipleUpload}
-                    className="hidden"
-                  />
-                </label>
-
-                {/* Gallery */}
-                {selectedProfile.images.length > 0 ? (
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {selectedProfile.images.map((img, i) => (
-                      <div key={i} className="relative rounded-2xl overflow-hidden">
-                        <img src={img} className="w-full h-64 object-cover" />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-stone-500 text-center py-12">No images yet – upload some above</p>
-                )}
-
-                {/* Future analysis note */}
-                <div className="mt-10 p-6 glass rounded-2xl text-center">
-                  <p className="text-amber-300">When xAI is ready again, click one button and I’ll analyse the whole collection for your Anima projection.</p>
-                  <p className="text-sm text-stone-500 mt-2">For now just collect – the more images, the clearer your taste becomes.</p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {selectedProfile.images.map((img, i) => <img key={i} src={img} className="rounded-2xl" />)}
                 </div>
               </>
-            )}
+            ) : <p className="text-stone-500 text-center py-20">Select a profile on the left</p>}
           </div>
         </div>
       )}
 
-      {/* Other tabs (kept simple – they need API later) */}
-      {tab === 'discover' && <div className="text-center py-20 text-stone-500">Discover tab needs API credits to generate images. We’ll turn it on later.</div>}
-      {tab === 'room' && <div className="text-center py-20 text-stone-500">Room Visualizer needs API credits. We’ll turn it on later.</div>}
-      {tab === 'gallery' && <div className="text-center py-20 text-stone-500">Your generated images will appear here when API is back.</div>}
+      {tab === 'room' && <div className="text-center py-20 text-stone-500">Room Visualizer still paused – let me know when you want it back.</div>}
     </div>
   );
 }

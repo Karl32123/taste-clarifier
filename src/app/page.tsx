@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Upload, Plus, Trash2 } from 'lucide-react';
+import { Upload, Plus, Trash2, Sparkles } from 'lucide-react';
 
 type Tab = { 
   id: string; 
@@ -30,6 +30,7 @@ export default function Taste() {
   const [contextMenu, setContextMenu] = useState<{ tabId: string; x: number; y: number } | null>(null);
   const [imageContext, setImageContext] = useState<{ image: string; x: number; y: number } | null>(null);
   const [tempUploads, setTempUploads] = useState<string[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
 
   const nyeBilderRef = useRef<HTMLDivElement>(null);
 
@@ -48,7 +49,7 @@ export default function Taste() {
     localStorage.setItem('tasteTrash', JSON.stringify(trash));
   }, [tabs, trash]);
 
-  // Paste ONLY for Nye bilder
+  // Paste listener on Nye bilder div
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
       if (currentTabId !== 'nyebilder') return;
@@ -83,11 +84,23 @@ export default function Taste() {
     };
   }, [currentTabId]);
 
-  // Right-click tab
+  // Right-click on tabs
   const handleRightClick = (e: React.MouseEvent, tabId: string) => {
     e.preventDefault();
     if (tabId === 'nyebilder') return;
     setContextMenu({ tabId, x: e.clientX, y: e.clientY });
+  };
+
+  // Right-click on images – copy to clipboard
+  const handleImageRightClick = (e: React.MouseEvent, image: string) => {
+    e.preventDefault();
+    setImageContext({ image, x: e.clientX, y: e.clientY });
+  };
+
+  const copyImageToClipboard = (image: string) => {
+    navigator.clipboard.writeText(image);
+    alert("Image copied to clipboard! Paste it back into Nye bilder (Ctrl+V) or anywhere.");
+    setImageContext(null);
   };
 
   const renameTab = (id: string) => {
@@ -102,7 +115,7 @@ export default function Taste() {
       setContextMenu(null);
       return;
     }
-    if (!confirm("Delete tab?")) return;
+    if (!confirm("Delete tab? Images go to Trashbin.")) return;
     const tab = tabs.find(t => t.id === id);
     if (tab) {
       const newTrash = tab.images.map(img => ({ id: Date.now().toString(), image: img, fromTab: tab.name }));
@@ -120,7 +133,7 @@ export default function Taste() {
     setContextMenu(null);
   };
 
-  // Drag reorder
+  // Drag reorder tabs
   const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
   const handleTabDrop = (targetId: string) => {
     if (!draggedTabId || draggedTabId === targetId) return;
@@ -135,7 +148,7 @@ export default function Taste() {
     setDraggedTabId(null);
   };
 
-  // Drag & drop files
+  // Drag & drop files for Nye bilder
   const handleFiles = (files: FileList) => {
     const newImages: string[] = [];
     Array.from(files).forEach(file => {
@@ -205,7 +218,25 @@ export default function Taste() {
         </button>
       </div>
 
-      {/* Nye bilder – ONLY this has upload */}
+      {/* Context menu for tabs */}
+      {contextMenu && (
+        <div style={{ position: 'fixed', left: contextMenu.x, top: contextMenu.y }} className="glass p-4 rounded-2xl z-50">
+          <button onClick={() => renameTab(contextMenu.tabId)} className="block w-full text-left py-2 hover:bg-white/10 px-4">Rename</button>
+          <button onClick={() => addSubTab(contextMenu.tabId)} className="block w-full text-left py-2 hover:bg-white/10 px-4">Add sub-tab</button>
+          <button onClick={() => deleteTab(contextMenu.tabId)} className="block w-full text-left py-2 text-red-400 hover:bg-white/10 px-4">Delete tab</button>
+          <button onClick={() => setContextMenu(null)} className="block w-full text-left py-2 hover:bg-white/10 px-4">Cancel</button>
+        </div>
+      )}
+
+      {/* Context menu for images */}
+      {imageContext && (
+        <div style={{ position: 'fixed', left: imageContext.x, top: imageContext.y }} className="glass p-4 rounded-2xl z-50">
+          <button onClick={() => copyImageToClipboard(imageContext.image)} className="block w-full text-left py-2 hover:bg-white/10 px-4">Copy image</button>
+          <button onClick={() => setImageContext(null)} className="block w-full text-left py-2 hover:bg-white/10 px-4">Cancel</button>
+        </div>
+      )}
+
+      {/* Nye bilder – ONLY this has upload UI */}
       {currentTabId !== 'trash' && currentTab.name === 'Nye bilder' && (
         <div className="glass p-12 rounded-3xl" ref={nyeBilderRef} tabIndex={0}>
           <h2 className="text-4xl mb-8">Nye bilder – Drag or Ctrl+V here</h2>
@@ -217,12 +248,14 @@ export default function Taste() {
             onDrop={e => { 
               e.preventDefault(); 
               setIsDragging(false); 
-              if (e.dataTransfer.files) handleFiles(e.dataTransfer.files);
+              if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                handleFiles(e.dataTransfer.files);
+              }
             }}
             className={`border-4 border-dashed rounded-3xl py-24 text-center text-2xl transition-all ${isDragging ? 'border-amber-300 bg-amber-300/10' : 'border-white/30 hover:border-white/60'}`}
           >
             <Upload className="mx-auto mb-6 w-16 h-16" />
-            Drag or Ctrl+V to paste images
+            Drag photos or Ctrl+V to paste
           </div>
 
           {tempUploads.length > 0 && (
@@ -248,7 +281,7 @@ export default function Taste() {
         </div>
       )}
 
-      {/* All other tabs and sub-tabs – only show images */}
+      {/* All other tabs and sub-tabs – images only */}
       {currentTabId !== 'trash' && currentTab.name !== 'Nye bilder' && (
         <div className="glass p-12 rounded-3xl">
           <h2 className="text-4xl mb-6">{currentTab.name}</h2>
@@ -258,7 +291,7 @@ export default function Taste() {
               {currentTab.subTabs.map(st => (
                 <div 
                   key={st.id} 
-                  className="px-6 py-3 rounded-2xl text-lg cursor-pointer glass hover:bg-white/10"
+                  className={`px-6 py-3 rounded-2xl text-lg cursor-pointer ${currentTabId === st.id ? 'bg-white text-black' : 'glass hover:bg-white/10'}`}
                   onClick={() => setCurrentTabId(st.id)}
                 >
                   ↳ {st.name}
@@ -289,11 +322,19 @@ export default function Taste() {
               <div key={item.id} className="relative rounded-3xl overflow-hidden">
                 <img src={item.image} className="w-full" />
                 <div className="absolute bottom-0 left-0 right-0 bg-black/80 p-4 flex gap-3">
-                  <select onChange={e => { if (e.target.value) restoreFromTrash(item, e.target.value); }} className="flex-1 glass py-3 rounded-2xl">
+                  <select 
+                    onChange={e => { if (e.target.value) restoreFromTrash(item, e.target.value); }} 
+                    className="flex-1 glass py-3 rounded-2xl"
+                  >
                     <option value="">Restore to...</option>
                     {tabs.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
-                  <button onClick={() => { if (confirm("Delete forever?")) setTrash(prev => prev.filter(i => i.id !== item.id)); }} className="bg-red-600 px-6 py-3 rounded-2xl">Delete forever</button>
+                  <button 
+                    onClick={() => { if (confirm("Delete forever?")) setTrash(prev => prev.filter(i => i.id !== item.id)); }} 
+                    className="bg-red-600 px-6 py-3 rounded-2xl"
+                  >
+                    Delete forever
+                  </button>
                 </div>
               </div>
             ))}

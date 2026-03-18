@@ -31,6 +31,10 @@ export default function Taste() {
   const [imageContext, setImageContext] = useState<{ image: string; x: number; y: number } | null>(null);
   const [tempUploads, setTempUploads] = useState<string[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+
+  // Drag state for reordering tabs
+  const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
+
   const nyeBilderRef = useRef<HTMLDivElement>(null);
 
   const currentTab = tabs.find(t => t.id === currentTabId) || tabs[0];
@@ -48,11 +52,11 @@ export default function Taste() {
     localStorage.setItem('tasteTrash', JSON.stringify(trash));
   }, [tabs, trash]);
 
-  // Paste listener INSIDE Nye bilder (more reliable)
+  // Paste listener on the Nye bilder div
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
       if (currentTabId !== 'nyebilder') return;
-      e.preventDefault(); // prevent browser paste
+      e.preventDefault();
       const items = e.clipboardData?.items;
       if (!items) return;
 
@@ -70,12 +74,27 @@ export default function Taste() {
         }
       });
 
-      // Add after reading
-      reader.onloadend = () => {
+      // Wait for readers to finish
+      Promise.all(Array.from(items).map(item => {
+        if (item.type.startsWith('image/')) {
+          return new Promise(resolve => {
+            const blob = item.getAsFile();
+            if (blob) {
+              const reader = new FileReader();
+              reader.onload = ev => {
+                if (ev.target?.result) newImages.push(ev.target.result as string);
+                resolve(null);
+              };
+              reader.readAsDataURL(blob);
+            } else resolve(null);
+          });
+        }
+        return Promise.resolve(null);
+      })).then(() => {
         if (newImages.length > 0) {
           setTempUploads(prev => [...prev, ...newImages]);
         }
-      };
+      });
     };
 
     const ref = nyeBilderRef.current;
@@ -135,7 +154,6 @@ export default function Taste() {
   };
 
   // Drag reorder tabs
-  const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
   const handleTabDrop = (targetId: string) => {
     if (!draggedTabId || draggedTabId === targetId) return;
     setTabs(prev => {
@@ -149,7 +167,7 @@ export default function Taste() {
     setDraggedTabId(null);
   };
 
-  // Drag & drop files (fixed)
+  // Drag & drop files
   const handleFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
     const newImages: string[] = [];
@@ -250,7 +268,9 @@ export default function Taste() {
             onDrop={e => { 
               e.preventDefault(); 
               setIsDragging(false); 
-              if (e.dataTransfer.files) handleFiles(e.dataTransfer.files); 
+              if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                handleFiles(e.dataTransfer.files);
+              }
             }}
             className={`border-4 border-dashed rounded-3xl py-24 text-center text-2xl transition-all ${isDragging ? 'border-amber-300 bg-amber-300/10' : 'border-white/30 hover:border-white/60'}`}
           >
@@ -260,7 +280,7 @@ export default function Taste() {
 
           {tempUploads.length > 0 && (
             <div className="mt-12">
-              <p className="text-xl mb-6">Where should these go?</p>
+              <p className="text-xl mb-6">Where should these go? ({tempUploads.length} images)</p>
               <div className="grid grid-cols-4 gap-8">
                 {tempUploads.map((img, i) => (
                   <div key={i} className="relative rounded-3xl overflow-hidden" onContextMenu={e => handleImageRightClick(e, img)}>

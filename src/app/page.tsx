@@ -86,7 +86,7 @@ export default function Taste() {
       reader.readAsDataURL(file);
     });
     if (newImages.length > 12) {
-      alert("⚠️ Too many images (max 12). The first 12 were added. Remove extras below.");
+      alert("⚠️ Too many images (max 12 recommended). The first 12 were added. Remove extras below if needed.");
     }
     setTempUploads(newImages.slice(0, 12));
   };
@@ -99,6 +99,15 @@ export default function Taste() {
   const deleteImageToTrash = (image: string) => {
     setTrash(prev => [...prev, { id: Date.now().toString(), image, fromTab: currentTab.name }]);
     setTabs(prev => prev.map(t => t.id === currentTabId ? { ...t, images: t.images.filter(i => i !== image) } : t));
+  };
+
+  const restoreFromTrash = (item: TrashItem, targetTabId: string) => {
+    setTabs(prev => prev.map(t => 
+      t.id === targetTabId 
+        ? { ...t, images: [...t.images, item.image] } 
+        : t
+    ));
+    setTrash(prev => prev.filter(i => i.id !== item.id));
   };
 
   return (
@@ -182,7 +191,12 @@ export default function Taste() {
                       <option value="">Choose destination...</option>
                       {tabs.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
-                    <button onClick={() => setTempUploads(prev => prev.filter((_, idx) => idx !== i))} className="absolute top-4 right-4 bg-black/70 p-2 rounded-full text-red-400">Remove</button>
+                    <button 
+                      onClick={() => setTempUploads(prev => prev.filter((_, idx) => idx !== i))} 
+                      className="absolute top-4 right-4 bg-black/70 p-2 rounded-full text-red-400"
+                    >
+                      Remove
+                    </button>
                   </div>
                 ))}
               </div>
@@ -201,19 +215,24 @@ export default function Taste() {
                 <img src={item.image} className="w-full" />
                 <div className="absolute bottom-0 left-0 right-0 bg-black/80 p-4 flex gap-3">
                   <select 
-  onChange={e => { 
-    if (e.target.value) restoreFromTrash(item, e.target.value); 
-  }} 
-  className="flex-1 glass py-3 rounded-2xl"
->
-  <option value="">Restore to...</option>
-  {tabs.map(t => (
-    <option key={t.id} value={t.id}>
-      {t.name}
-    </option>
-  ))}
-</select>
-                  <button onClick={() => { if (confirm("Delete forever?")) setTrash(prev => prev.filter(i => i.id !== item.id)); }} className="bg-red-600 px-6 py-3 rounded-2xl">Delete forever</button>
+                    onChange={e => { 
+                      if (e.target.value) restoreFromTrash(item, e.target.value); 
+                    }} 
+                    className="flex-1 glass py-3 rounded-2xl"
+                  >
+                    <option value="">Restore to...</option>
+                    {tabs.map(t => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button 
+                    onClick={() => { if (confirm("Delete forever?")) setTrash(prev => prev.filter(i => i.id !== item.id)); }} 
+                    className="bg-red-600 px-6 py-3 rounded-2xl"
+                  >
+                    Delete forever
+                  </button>
                 </div>
               </div>
             ))}

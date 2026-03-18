@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Palette, Home, Heart, Sparkles, Upload, Plus, Trash2 } from 'lucide-react';
 
 type Tab = { 
@@ -31,9 +31,7 @@ export default function Taste() {
   const [imageContext, setImageContext] = useState<{ image: string; x: number; y: number } | null>(null);
   const [tempUploads, setTempUploads] = useState<string[]>([]);
   const [isDragging, setIsDragging] = useState(false);
-
-  // Drag state for reordering tabs
-  const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
+  const nyeBilderRef = useRef<HTMLDivElement>(null);
 
   const currentTab = tabs.find(t => t.id === currentTabId) || tabs[0];
 
@@ -50,14 +48,17 @@ export default function Taste() {
     localStorage.setItem('tasteTrash', JSON.stringify(trash));
   }, [tabs, trash]);
 
-  // Paste support
+  // Paste listener INSIDE Nye bilder (more reliable)
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
       if (currentTabId !== 'nyebilder') return;
-      const items = Array.from(e.clipboardData?.items || []);
+      e.preventDefault(); // prevent browser paste
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
       const newImages: string[] = [];
-      items.forEach(item => {
-        if (item.type.indexOf('image') !== -1) {
+      Array.from(items).forEach(item => {
+        if (item.type.startsWith('image/')) {
           const blob = item.getAsFile();
           if (blob) {
             const reader = new FileReader();
@@ -68,13 +69,20 @@ export default function Taste() {
           }
         }
       });
-      setTimeout(() => {
-        if (newImages.length > 0) setTempUploads(prev => [...prev, ...newImages]);
-      }, 100);
+
+      // Add after reading
+      reader.onloadend = () => {
+        if (newImages.length > 0) {
+          setTempUploads(prev => [...prev, ...newImages]);
+        }
+      };
     };
 
-    window.addEventListener('paste', handlePaste);
-    return () => window.removeEventListener('paste', handlePaste);
+    const ref = nyeBilderRef.current;
+    if (ref) ref.addEventListener('paste', handlePaste);
+    return () => {
+      if (ref) ref.removeEventListener('paste', handlePaste);
+    };
   }, [currentTabId]);
 
   // Right-click on tabs
@@ -84,7 +92,7 @@ export default function Taste() {
     setContextMenu({ tabId, x: e.clientX, y: e.clientY });
   };
 
-  // Right-click on images → Copy
+  // Right-click on images
   const handleImageRightClick = (e: React.MouseEvent, image: string) => {
     e.preventDefault();
     setImageContext({ image, x: e.clientX, y: e.clientY });
@@ -92,7 +100,7 @@ export default function Taste() {
 
   const copyImageToClipboard = (image: string) => {
     navigator.clipboard.writeText(image);
-    alert("Image copied to clipboard! You can paste it later (Ctrl+V in Nye bilder or elsewhere).");
+    alert("Image copied to clipboard! Paste it back into Nye bilder (Ctrl+V) or anywhere.");
     setImageContext(null);
   };
 
@@ -126,7 +134,8 @@ export default function Taste() {
     setContextMenu(null);
   };
 
-  // Drag reorder
+  // Drag reorder tabs
+  const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
   const handleTabDrop = (targetId: string) => {
     if (!draggedTabId || draggedTabId === targetId) return;
     setTabs(prev => {
@@ -140,8 +149,9 @@ export default function Taste() {
     setDraggedTabId(null);
   };
 
-  // Drag & drop files
-  const handleFiles = (files: FileList) => {
+  // Drag & drop files (fixed)
+  const handleFiles = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
     const newImages: string[] = [];
     Array.from(files).forEach(file => {
       const reader = new FileReader();
@@ -150,8 +160,7 @@ export default function Taste() {
       };
       reader.readAsDataURL(file);
     });
-    if (newImages.length > 12) alert("Max 12 images recommended. Only first 12 added.");
-    setTempUploads(newImages.slice(0, 12));
+    setTempUploads(newImages);
   };
 
   const routeImage = (img: string, targetId: string) => {
@@ -231,13 +240,18 @@ export default function Taste() {
 
       {/* Nye bilder */}
       {currentTabId !== 'trash' && currentTab.name === 'Nye bilder' && (
-        <div className="glass p-12 rounded-3xl">
+        <div className="glass p-12 rounded-3xl" ref={nyeBilderRef} tabIndex={0}>
           <h2 className="text-4xl mb-8">Nye bilder – Drag or paste images here</h2>
           
           <div 
             onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+            onDragEnter={e => { e.preventDefault(); setIsDragging(true); }}
             onDragLeave={() => setIsDragging(false)}
-            onDrop={e => { e.preventDefault(); setIsDragging(false); handleFiles(e.dataTransfer.files); }}
+            onDrop={e => { 
+              e.preventDefault(); 
+              setIsDragging(false); 
+              if (e.dataTransfer.files) handleFiles(e.dataTransfer.files); 
+            }}
             className={`border-4 border-dashed rounded-3xl py-24 text-center text-2xl transition-all ${isDragging ? 'border-amber-300 bg-amber-300/10' : 'border-white/30 hover:border-white/60'}`}
           >
             <Upload className="mx-auto mb-6 w-16 h-16" />
@@ -267,7 +281,7 @@ export default function Taste() {
         </div>
       )}
 
-      {/* Normal tab */}
+      {/* Other tabs */}
       {currentTabId !== 'trash' && currentTab.name !== 'Nye bilder' && (
         <div className="glass p-12 rounded-3xl">
           <h2 className="text-4xl mb-6">{currentTab.name}</h2>

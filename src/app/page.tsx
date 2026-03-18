@@ -3,8 +3,22 @@
 import { useState, useEffect } from 'react';
 import { Palette, Home, Heart, Sparkles, Upload, Plus, Trash2 } from 'lucide-react';
 
-type Tab = { id: string; name: string; images: string[]; notes: string; subTabs: SubTab[] };
-type SubTab = { id: string; name: string; images: string[] };
+type Tab = { 
+  id: string; 
+  name: string; 
+  images: string[]; 
+  notes: string; 
+  subTabs: SubTab[]; 
+  parentId?: string;  // for sub-tabs
+};
+
+type SubTab = { 
+  id: string; 
+  name: string; 
+  images: string[]; 
+  notes: string; 
+};
+
 type TrashItem = { id: string; image: string; fromTab: string };
 
 export default function Taste() {
@@ -33,10 +47,37 @@ export default function Taste() {
     localStorage.setItem('tasteTrash', JSON.stringify(trash));
   }, [tabs, trash]);
 
-  // Right-click (Nye bilder protected)
+  // Paste support for Nye bilder only
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (currentTabId !== 'nyebilder') return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      const newImages: string[] = [];
+      Array.from(items).forEach(item => {
+        if (item.type.indexOf('image') !== -1) {
+          const blob = item.getAsFile();
+          if (blob) {
+            const reader = new FileReader();
+            reader.onload = ev => {
+              if (ev.target?.result) newImages.push(ev.target.result as string);
+              if (newImages.length > 0) setTempUploads(prev => [...prev, ...newImages]);
+            };
+            reader.readAsDataURL(blob);
+          }
+        }
+      });
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [currentTabId]);
+
+  // Right-click (protect Nye bilder)
   const handleRightClick = (e: React.MouseEvent, tabId: string) => {
     e.preventDefault();
-    if (tabId === 'nyebilder') return; // protected
+    if (tabId === 'nyebilder') return;
     setContextMenu({ tabId, x: e.clientX, y: e.clientY });
   };
 
@@ -48,7 +89,7 @@ export default function Taste() {
 
   const deleteTab = (id: string) => {
     if (id === 'nyebilder') {
-      alert("Nye bilder cannot be deleted – it's the heart of the app.");
+      alert("Nye bilder cannot be deleted – it's required.");
       setContextMenu(null);
       return;
     }
@@ -65,12 +106,12 @@ export default function Taste() {
   const addSubTab = (tabId: string) => {
     const name = prompt("Sub-tab name:");
     if (name) setTabs(prev => prev.map(t => t.id === tabId 
-      ? { ...t, subTabs: [...t.subTabs, { id: Date.now().toString(), name, images: [] }] } 
+      ? { ...t, subTabs: [...t.subTabs, { id: Date.now().toString(), name, images: [], notes: '' }] } 
       : t));
     setContextMenu(null);
   };
 
-  // Drag to reorder tabs
+  // Drag reorder tabs
   const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
   const handleTabDrop = (targetId: string) => {
     if (!draggedTabId || draggedTabId === targetId) return;
@@ -85,7 +126,7 @@ export default function Taste() {
     setDraggedTabId(null);
   };
 
-  // Nye bilder ONLY – drag & drop + routing
+  // Drag & drop files
   const handleFiles = (files: FileList) => {
     const newImages: string[] = [];
     Array.from(files).forEach(file => {
@@ -93,7 +134,7 @@ export default function Taste() {
       reader.onload = ev => newImages.push(ev.target?.result as string);
       reader.readAsDataURL(file);
     });
-    if (newImages.length > 12) alert("⚠️ Too many images. Only the first 12 were added.");
+    if (newImages.length > 12) alert("Too many images (max 12). Only first 12 added.");
     setTempUploads(newImages.slice(0, 12));
   };
 
@@ -164,10 +205,10 @@ export default function Taste() {
         </div>
       )}
 
-      {/* NYE BILDER – FIXED drag & routing */}
+      {/* NYE BILDER – drag & paste + routing */}
       {currentTabId !== 'trash' && currentTab.name === 'Nye bilder' && (
         <div className="glass p-12 rounded-3xl">
-          <h2 className="text-4xl mb-8">Nye bilder – Drag any number of images here</h2>
+          <h2 className="text-4xl mb-8">Nye bilder – Drag or paste images here</h2>
           
           <div 
             onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
@@ -176,12 +217,12 @@ export default function Taste() {
             className={`border-4 border-dashed rounded-3xl py-24 text-center text-2xl transition-all ${isDragging ? 'border-amber-300 bg-amber-300/10' : 'border-white/30 hover:border-white/60'}`}
           >
             <Upload className="mx-auto mb-6 w-16 h-16" />
-            Drag photos here
+            Drag photos or Ctrl+V to paste
           </div>
 
           {tempUploads.length > 0 && (
             <div className="mt-12">
-              <p className="text-xl mb-6">Where should these go?</p>
+              <p className="text-xl mb-6">Choose destination for each image:</p>
               <div className="grid grid-cols-4 gap-8">
                 {tempUploads.map((img, i) => (
                   <div key={i} className="relative rounded-3xl overflow-hidden">
@@ -190,7 +231,7 @@ export default function Taste() {
                       onChange={e => routeImage(img, e.target.value)} 
                       className="absolute bottom-4 left-4 right-4 glass py-4 rounded-2xl text-lg"
                     >
-                      <option value="">Choose destination tab...</option>
+                      <option value="">Choose tab...</option>
                       {tabs.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
                     <button onClick={() => setTempUploads(prev => prev.filter((_, idx) => idx !== i))} className="absolute top-4 right-4 bg-black/70 p-2 rounded-full text-red-400">Remove</button>
@@ -202,7 +243,7 @@ export default function Taste() {
         </div>
       )}
 
-      {/* Other tabs view (shows sub-tabs) */}
+      {/* Normal tab or sub-tab view */}
       {currentTabId !== 'trash' && currentTab.name !== 'Nye bilder' && (
         <div className="glass p-12 rounded-3xl">
           <h2 className="text-4xl mb-6">{currentTab.name}</h2>
@@ -211,7 +252,11 @@ export default function Taste() {
           {currentTab.subTabs.length > 0 && (
             <div className="mb-8 flex flex-wrap gap-3">
               {currentTab.subTabs.map(st => (
-                <div key={st.id} className="glass px-6 py-3 rounded-2xl text-lg">
+                <div 
+                  key={st.id} 
+                  className={`px-6 py-3 rounded-2xl text-lg cursor-pointer ${currentTabId === st.id ? 'bg-white text-black' : 'glass hover:bg-white/10'}`}
+                  onClick={() => setCurrentTabId(st.id)}
+                >
                   ↳ {st.name}
                 </div>
               ))}
@@ -250,7 +295,12 @@ export default function Taste() {
                     <option value="">Restore to...</option>
                     {tabs.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
-                  <button onClick={() => { if (confirm("Delete forever?")) setTrash(prev => prev.filter(i => i.id !== item.id)); }} className="bg-red-600 px-6 py-3 rounded-2xl">Delete forever</button>
+                  <button 
+                    onClick={() => { if (confirm("Delete forever?")) setTrash(prev => prev.filter(i => i.id !== item.id)); }} 
+                    className="bg-red-600 px-6 py-3 rounded-2xl"
+                  >
+                    Delete forever
+                  </button>
                 </div>
               </div>
             ))}

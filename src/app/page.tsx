@@ -3,10 +3,12 @@
 import { useState, useEffect } from 'react';
 import { Sparkles, Upload, Plus, Trash2 } from 'lucide-react';
 
+type ImageItem = { url: string; tags: string[] };
+
 type Tab = { 
   id: string; 
   name: string; 
-  images: { url: string; tags: string[] }[]; 
+  images: ImageItem[]; 
   notes: string; 
   subTabs: SubTab[]; 
 };
@@ -14,35 +16,34 @@ type Tab = {
 type SubTab = { 
   id: string; 
   name: string; 
-  images: { url: string; tags: string[] }[]; 
+  images: ImageItem[]; 
   notes: string; 
 };
 
 export default function Taste() {
   const [tabs, setTabs] = useState<Tab[]>([
-    { 
-      id: 'nyebilder', 
-      name: 'Nye bilder', 
-      images: [], 
-      notes: '', 
-      subTabs: [] 
-    },
-    { 
-      id: 'discover', 
-      name: 'Discover Beauty', 
-      images: [], 
-      notes: '', 
-      subTabs: [] 
-    },
+    { id: 'nyebilder', name: 'Nye bilder', images: [], notes: '', subTabs: [] },
+    { id: 'discover', name: 'Discover Beauty', images: [], notes: '', subTabs: [] },
   ]);
   const [currentTabId, setCurrentTabId] = useState('nyebilder');
+  const [contextMenu, setContextMenu] = useState<{ id: string; type: 'tab' | 'subtab'; parentId?: string; x: number; y: number } | null>(null);
   const [tempUploads, setTempUploads] = useState<string[]>([]);
   const [selectedDestination, setSelectedDestination] = useState<string>('');
   const [newTag, setNewTag] = useState('');
 
   const currentTab = tabs.find(t => t.id === currentTabId) || tabs[0];
 
-  // Paste only in Nye bilder
+  // Load & save
+  useEffect(() => {
+    const saved = localStorage.getItem('tasteTabs');
+    if (saved) setTabs(JSON.parse(saved));
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('tasteTabs', JSON.stringify(tabs));
+  }, [tabs]);
+
+  // Paste listener
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
       if (currentTabId !== 'nyebilder') return;
@@ -70,6 +71,56 @@ export default function Taste() {
     return () => window.removeEventListener('paste', handlePaste);
   }, [currentTabId]);
 
+  // Right-click handler
+  const handleRightClick = (e: React.MouseEvent, id: string, type: 'tab' | 'subtab', parentId?: string) => {
+    e.preventDefault();
+    if (id === 'nyebilder') return;
+    setContextMenu({ id, type, parentId, x: e.clientX, y: e.clientY });
+  };
+
+  const renameItem = (id: string, type: 'tab' | 'subtab', parentId?: string) => {
+    const name = prompt("New name:");
+    if (!name) return;
+    if (type === 'tab') {
+      setTabs(prev => prev.map(t => t.id === id ? { ...t, name } : t));
+    } else if (parentId) {
+      setTabs(prev => prev.map(t => t.id === parentId 
+        ? { ...t, subTabs: t.subTabs.map(st => st.id === id ? { ...st, name } : st) } 
+        : t));
+    }
+    setContextMenu(null);
+  };
+
+  const deleteItem = (id: string, type: 'tab' | 'subtab', parentId?: string) => {
+    if (id === 'nyebilder') {
+      alert("Nye bilder cannot be deleted.");
+      setContextMenu(null);
+      return;
+    }
+    if (!confirm("Delete?")) return;
+    if (type === 'tab') {
+      const tab = tabs.find(t => t.id === id);
+      if (tab) {
+        const newTrash = tab.images.map(img => ({ id: Date.now().toString(), image: img.url, fromTab: tab.name }));
+        // Trashbin not implemented yet, but you can add it
+        setTabs(prev => prev.filter(t => t.id !== id));
+      }
+    } else if (parentId) {
+      setTabs(prev => prev.map(t => t.id === parentId 
+        ? { ...t, subTabs: t.subTabs.filter(st => st.id !== id) } 
+        : t));
+    }
+    setContextMenu(null);
+  };
+
+  const addSubTab = (tabId: string) => {
+    const name = prompt("Sub-tab name:");
+    if (name) setTabs(prev => prev.map(t => t.id === tabId 
+      ? { ...t, subTabs: [...t.subTabs, { id: Date.now().toString(), name, images: [], notes: '' }] } 
+      : t));
+    setContextMenu(null);
+  };
+
   const routeImage = (img: string) => {
     if (!selectedDestination) {
       alert("Choose a destination first");
@@ -80,7 +131,6 @@ export default function Taste() {
       if (t.id === selectedDestination) {
         return { ...t, images: [...t.images, { url: img, tags }] };
       }
-      // Also check sub-tabs
       const updatedSubTabs = t.subTabs.map(st => {
         if (st.id === selectedDestination) {
           return { ...st, images: [...st.images, { url: img, tags }] };
@@ -91,14 +141,6 @@ export default function Taste() {
     }));
     setTempUploads(prev => prev.filter(i => i !== img));
     setNewTag('');
-  };
-
-  const createSubTab = (parentId: string) => {
-    const name = prompt("Sub-tab name:");
-    if (!name) return;
-    setTabs(prev => prev.map(t => t.id === parentId 
-      ? { ...t, subTabs: [...t.subTabs, { id: Date.now().toString(), name, images: [], notes: '' }] } 
-      : t));
   };
 
   return (
@@ -116,8 +158,8 @@ export default function Taste() {
           <div
             key={tab.id}
             onClick={() => setCurrentTabId(tab.id)}
+            onContextMenu={e => handleRightClick(e, tab.id, 'tab')}
             className={`flex items-center gap-3 px-8 py-4 rounded-3xl text-lg cursor-pointer ${currentTabId === tab.id ? 'bg-white text-black' : 'hover:bg-white/10'}`}
-            onContextMenu={e => { e.preventDefault(); if (tab.id !== 'nyebilder') createSubTab(tab.id); }}
           >
             {tab.name}
           </div>
@@ -135,6 +177,16 @@ export default function Taste() {
         </button>
       </div>
 
+      {/* Context Menu */}
+      {contextMenu && (
+        <div style={{ position: 'fixed', left: contextMenu.x, top: contextMenu.y }} className="glass p-4 rounded-2xl z-50">
+          <button onClick={() => rename(contextMenu.id, contextMenu.type, contextMenu.parentId)} className="block w-full text-left py-2 hover:bg-white/10 px-4">Rename</button>
+          <button onClick={() => addSubTab(contextMenu.id)} className="block w-full text-left py-2 hover:bg-white/10 px-4">Add sub-tab</button>
+          <button onClick={() => deleteItem(contextMenu.id, contextMenu.type, contextMenu.parentId)} className="block w-full text-left py-2 text-red-400 hover:bg-white/10 px-4">Delete</button>
+          <button onClick={() => setContextMenu(null)} className="block w-full text-left py-2 hover:bg-white/10 px-4">Cancel</button>
+        </div>
+      )}
+
       {/* Nye bilder */}
       {currentTabId !== 'trash' && currentTab.name === 'Nye bilder' && (
         <div className="glass p-12 rounded-3xl">
@@ -151,6 +203,7 @@ export default function Taste() {
                   <div key={i} className="relative rounded-3xl overflow-hidden">
                     <img src={img} className="w-full" />
                     <select 
+                      value={selectedDestination}
                       onChange={e => setSelectedDestination(e.target.value)} 
                       className="absolute bottom-4 left-4 right-4 glass py-4 rounded-2xl text-lg"
                     >
@@ -166,7 +219,7 @@ export default function Taste() {
                     </select>
                     <input 
                       type="text" 
-                      placeholder="tag (e.g. warm, anima)" 
+                      placeholder="tag (e.g. warm)" 
                       value={newTag} 
                       onChange={e => setNewTag(e.target.value)} 
                       className="absolute top-4 left-4 glass px-3 py-1 rounded text-sm w-48"
@@ -181,19 +234,19 @@ export default function Taste() {
         </div>
       )}
 
-      {/* Other tabs & sub-tabs – images only */}
+      {/* Other tabs & sub-tabs */}
       {currentTabId !== 'trash' && currentTab.name !== 'Nye bilder' && (
         <div className="glass p-12 rounded-3xl">
           <h2 className="text-4xl mb-6">{currentTab.name}</h2>
 
-          {/* Sub-tabs */}
           {currentTab.subTabs.length > 0 && (
             <div className="mb-8 flex flex-wrap gap-3">
               {currentTab.subTabs.map(st => (
                 <button 
                   key={st.id} 
                   onClick={() => setCurrentTabId(st.id)}
-                  className="px-6 py-3 rounded-2xl text-lg glass hover:bg-white/10"
+                  onContextMenu={e => handleRightClick(e, st.id, 'subtab', currentTabId)}
+                  className="px-6 py-3 rounded-2xl text-lg cursor-pointer glass hover:bg-white/10"
                 >
                   ↳ {st.name}
                 </button>
@@ -201,10 +254,9 @@ export default function Taste() {
             </div>
           )}
 
-          {/* Images */}
           <div className="grid grid-cols-4 gap-8">
             {currentTab.images.map((imgObj, i) => (
-              <div key={i} className="relative rounded-3xl overflow-hidden" onContextMenu={e => { e.preventDefault(); setImageContext({ image: imgObj.url, x: e.clientX, y: e.clientY }); }}>
+              <div key={i} className="relative rounded-3xl overflow-hidden">
                 <img src={imgObj.url} className="w-full" />
                 <div className="absolute bottom-2 left-2 text-xs bg-black/70 px-2 py-1 rounded">
                   {imgObj.tags.join(' • ') || 'no tag'}
@@ -212,14 +264,6 @@ export default function Taste() {
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {/* Trashbin (simple for now) */}
-      {currentTabId === 'trash' && (
-        <div className="glass p-12 rounded-3xl">
-          <h2 className="text-4xl mb-8">Trashbin</h2>
-          <p className="text-stone-400">Trashbin will be fully functional in the next update.</p>
         </div>
       )}
     </div>

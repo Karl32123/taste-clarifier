@@ -200,10 +200,19 @@ export default function Taste() {
               <div key={item.id} className="relative rounded-3xl overflow-hidden">
                 <img src={item.image} className="w-full" />
                 <div className="absolute bottom-0 left-0 right-0 bg-black/80 p-4 flex gap-3">
-                  <select onChange={e => { restoreFromTrash(item, e.target.value); }} className="flex-1 glass py-3 rounded-2xl">
-                    <option value="">Restore to...</option>
-                    {tabs.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                  </select>
+                  <select 
+  onChange={e => { 
+    if (e.target.value) restoreFromTrash(item, e.target.value); 
+  }} 
+  className="flex-1 glass py-3 rounded-2xl"
+>
+  <option value="">Restore to...</option>
+  {tabs.map(t => (
+    <option key={t.id} value={t.id}>
+      {t.name}
+    </option>
+  ))}
+</select>
                   <button onClick={() => { if (confirm("Delete forever?")) setTrash(prev => prev.filter(i => i.id !== item.id)); }} className="bg-red-600 px-6 py-3 rounded-2xl">Delete forever</button>
                 </div>
               </div>

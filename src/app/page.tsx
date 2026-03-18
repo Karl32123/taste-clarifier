@@ -33,9 +33,10 @@ export default function Taste() {
     localStorage.setItem('tasteTrash', JSON.stringify(trash));
   }, [tabs, trash]);
 
-  // Right-click menu
+  // Right-click (Nye bilder protected)
   const handleRightClick = (e: React.MouseEvent, tabId: string) => {
     e.preventDefault();
+    if (tabId === 'nyebilder') return; // protected
     setContextMenu({ tabId, x: e.clientX, y: e.clientY });
   };
 
@@ -46,6 +47,11 @@ export default function Taste() {
   };
 
   const deleteTab = (id: string) => {
+    if (id === 'nyebilder') {
+      alert("Nye bilder cannot be deleted – it's the heart of the app.");
+      setContextMenu(null);
+      return;
+    }
     if (!confirm("Delete tab? Images go to Trashbin.")) return;
     const tab = tabs.find(t => t.id === id);
     if (tab) {
@@ -58,11 +64,13 @@ export default function Taste() {
 
   const addSubTab = (tabId: string) => {
     const name = prompt("Sub-tab name:");
-    if (name) setTabs(prev => prev.map(t => t.id === tabId ? { ...t, subTabs: [...t.subTabs, { id: Date.now().toString(), name, images: [] }] } : t));
+    if (name) setTabs(prev => prev.map(t => t.id === tabId 
+      ? { ...t, subTabs: [...t.subTabs, { id: Date.now().toString(), name, images: [] }] } 
+      : t));
     setContextMenu(null);
   };
 
-  // Drag reorder tabs
+  // Drag to reorder tabs
   const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
   const handleTabDrop = (targetId: string) => {
     if (!draggedTabId || draggedTabId === targetId) return;
@@ -77,7 +85,7 @@ export default function Taste() {
     setDraggedTabId(null);
   };
 
-  // Upload ONLY in Nye bilder
+  // Nye bilder ONLY – drag & drop + routing
   const handleFiles = (files: FileList) => {
     const newImages: string[] = [];
     Array.from(files).forEach(file => {
@@ -85,9 +93,7 @@ export default function Taste() {
       reader.onload = ev => newImages.push(ev.target?.result as string);
       reader.readAsDataURL(file);
     });
-    if (newImages.length > 12) {
-      alert("⚠️ Too many images (max 12 recommended). The first 12 were added. Remove extras below if needed.");
-    }
+    if (newImages.length > 12) alert("⚠️ Too many images. Only the first 12 were added.");
     setTempUploads(newImages.slice(0, 12));
   };
 
@@ -102,11 +108,7 @@ export default function Taste() {
   };
 
   const restoreFromTrash = (item: TrashItem, targetTabId: string) => {
-    setTabs(prev => prev.map(t => 
-      t.id === targetTabId 
-        ? { ...t, images: [...t.images, item.image] } 
-        : t
-    ));
+    setTabs(prev => prev.map(t => t.id === targetTabId ? { ...t, images: [...t.images, item.image] } : t));
     setTrash(prev => prev.filter(i => i.id !== item.id));
   };
 
@@ -119,7 +121,7 @@ export default function Taste() {
         </div>
       </header>
 
-      {/* TABS BAR – draggable + right-click */}
+      {/* TABS BAR */}
       <div className="flex gap-2 mb-12 border-b border-white/10 pb-6 flex-wrap">
         {tabs.map(tab => (
           <div
@@ -152,7 +154,7 @@ export default function Taste() {
         </button>
       </div>
 
-      {/* CONTEXT MENU */}
+      {/* CONTEXT MENU (Nye bilder protected) */}
       {contextMenu && (
         <div style={{ position: 'fixed', left: contextMenu.x, top: contextMenu.y }} className="glass p-4 rounded-2xl z-50">
           <button onClick={() => renameTab(contextMenu.tabId)} className="block w-full text-left py-2 hover:bg-white/10 px-4">Rename</button>
@@ -162,10 +164,10 @@ export default function Taste() {
         </div>
       )}
 
-      {/* NYE BILDER – ONLY drag & drop + routing */}
+      {/* NYE BILDER – FIXED drag & routing */}
       {currentTabId !== 'trash' && currentTab.name === 'Nye bilder' && (
         <div className="glass p-12 rounded-3xl">
-          <h2 className="text-4xl mb-8">Nye bilder – Drag as many as you want</h2>
+          <h2 className="text-4xl mb-8">Nye bilder – Drag any number of images here</h2>
           
           <div 
             onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
@@ -174,7 +176,7 @@ export default function Taste() {
             className={`border-4 border-dashed rounded-3xl py-24 text-center text-2xl transition-all ${isDragging ? 'border-amber-300 bg-amber-300/10' : 'border-white/30 hover:border-white/60'}`}
           >
             <Upload className="mx-auto mb-6 w-16 h-16" />
-            Drag photos here (max 12 recommended)
+            Drag photos here
           </div>
 
           {tempUploads.length > 0 && (
@@ -188,15 +190,10 @@ export default function Taste() {
                       onChange={e => routeImage(img, e.target.value)} 
                       className="absolute bottom-4 left-4 right-4 glass py-4 rounded-2xl text-lg"
                     >
-                      <option value="">Choose destination...</option>
+                      <option value="">Choose destination tab...</option>
                       {tabs.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
-                    <button 
-                      onClick={() => setTempUploads(prev => prev.filter((_, idx) => idx !== i))} 
-                      className="absolute top-4 right-4 bg-black/70 p-2 rounded-full text-red-400"
-                    >
-                      Remove
-                    </button>
+                    <button onClick={() => setTempUploads(prev => prev.filter((_, idx) => idx !== i))} className="absolute top-4 right-4 bg-black/70 p-2 rounded-full text-red-400">Remove</button>
                   </div>
                 ))}
               </div>
@@ -205,7 +202,39 @@ export default function Taste() {
         </div>
       )}
 
-      {/* TRASHBIN */}
+      {/* Other tabs view (shows sub-tabs) */}
+      {currentTabId !== 'trash' && currentTab.name !== 'Nye bilder' && (
+        <div className="glass p-12 rounded-3xl">
+          <h2 className="text-4xl mb-6">{currentTab.name}</h2>
+
+          {/* Sub-tabs */}
+          {currentTab.subTabs.length > 0 && (
+            <div className="mb-8 flex flex-wrap gap-3">
+              {currentTab.subTabs.map(st => (
+                <div key={st.id} className="glass px-6 py-3 rounded-2xl text-lg">
+                  ↳ {st.name}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Images */}
+          {currentTab.images.length > 0 && (
+            <div className="grid grid-cols-4 gap-8">
+              {currentTab.images.map((img, i) => (
+                <div key={i} className="relative rounded-3xl overflow-hidden group">
+                  <img src={img} className="w-full" />
+                  <button onClick={() => deleteImageToTrash(img)} className="absolute top-4 right-4 bg-black/70 p-3 rounded-full opacity-0 group-hover:opacity-100">
+                    <Trash2 className="w-6 h-6 text-red-400" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Trashbin */}
       {currentTabId === 'trash' && (
         <div className="glass p-12 rounded-3xl">
           <h2 className="text-4xl mb-8">Trashbin ({trash.length})</h2>
@@ -215,24 +244,13 @@ export default function Taste() {
                 <img src={item.image} className="w-full" />
                 <div className="absolute bottom-0 left-0 right-0 bg-black/80 p-4 flex gap-3">
                   <select 
-                    onChange={e => { 
-                      if (e.target.value) restoreFromTrash(item, e.target.value); 
-                    }} 
+                    onChange={e => { if (e.target.value) restoreFromTrash(item, e.target.value); }} 
                     className="flex-1 glass py-3 rounded-2xl"
                   >
                     <option value="">Restore to...</option>
-                    {tabs.map(t => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
+                    {tabs.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
-                  <button 
-                    onClick={() => { if (confirm("Delete forever?")) setTrash(prev => prev.filter(i => i.id !== item.id)); }} 
-                    className="bg-red-600 px-6 py-3 rounded-2xl"
-                  >
-                    Delete forever
-                  </button>
+                  <button onClick={() => { if (confirm("Delete forever?")) setTrash(prev => prev.filter(i => i.id !== item.id)); }} className="bg-red-600 px-6 py-3 rounded-2xl">Delete forever</button>
                 </div>
               </div>
             ))}
